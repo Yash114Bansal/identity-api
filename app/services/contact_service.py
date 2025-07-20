@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.contact import Contact, LinkPrecedenceEnum
 from app.schemas.contact import ContactCreate, ContactResponse
-from typing import List, Optional
+from typing import List, Optional, Set
 from sqlalchemy import or_, and_
 from app.core.exceptions import InvalidContactInput
 
@@ -13,13 +13,12 @@ class ContactService:
         if not contact_in.email and not contact_in.phoneNumber:
             raise InvalidContactInput()
         # find all contacts with matching email or phone
-        query = self.db.query(Contact).filter(
+        contacts = self.db.query(Contact).filter(
             or_(
                 Contact.email == contact_in.email if contact_in.email else False,
                 Contact.phoneNumber == contact_in.phoneNumber if contact_in.phoneNumber else False
             )
-        )
-        contacts = query.all()
+        ).all()
 
         if not contacts:
             # No existing contact, create new primary one
@@ -38,14 +37,38 @@ class ContactService:
                 secondaryContactIds=[]
             )
 
-        # There are existing contacts, find the primary one
-        primaries = [c for c in contacts if c.linkPrecedence == LinkPrecedenceEnum.primary]
+        # find all related contacts (by email or phone, recursively)
+        all_related_contacts = set(contacts)
+        to_check = set(contacts)
+        while to_check:
+            current = to_check.pop()
+            linked = self.db.query(Contact).filter(
+                or_(
+                    Contact.linkedId == current.id,
+                    Contact.id == current.linkedId
+                )
+            ).all()
+            new_contacts = set(linked) - all_related_contacts
+            all_related_contacts.update(new_contacts)
+            to_check.update(new_contacts)
+        all_related_contacts = list(all_related_contacts)
+
+        # find all primaries ones
+        primaries = [c for c in all_related_contacts if c.linkPrecedence == LinkPrecedenceEnum.primary]
         if primaries:
             primary = min(primaries, key=lambda c: c.createdAt)
         else:
-            primary = min(contacts, key=lambda c: c.createdAt)
+            primary = min(all_related_contacts, key=lambda c: c.createdAt)
 
-        # Gather all linked contacts (primary + secondaries)
+        # if there are multiple primaries, update all but the oldest to secondary
+        for p in primaries:
+            if p.id != primary.id:
+                p.linkPrecedence = LinkPrecedenceEnum.secondary
+                p.linkedId = primary.id
+                self.db.add(p)
+        self.db.commit()
+
+        # gather all linked contacts (primary + secondaries)
         all_linked = self.db.query(Contact).filter(
             or_(
                 Contact.id == primary.id,
@@ -54,8 +77,8 @@ class ContactService:
         ).all()
 
         # Check if new info needs to be added as secondary
-        emails = set([c.email for c in all_linked if c.email])
-        phoneNumbers = set([c.phoneNumber for c in all_linked if c.phoneNumber])
+        emails: Set[str] = set([c.email for c in all_linked if c.email])
+        phoneNumbers: Set[str] = set([c.phoneNumber for c in all_linked if c.phoneNumber])
         secondaryContactIds = [c.id for c in all_linked if c.linkPrecedence == LinkPrecedenceEnum.secondary]
 
         is_new_info = False
