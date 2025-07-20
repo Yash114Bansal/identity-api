@@ -3,12 +3,15 @@ from app.models.contact import Contact, LinkPrecedenceEnum
 from app.schemas.contact import ContactCreate, ContactResponse
 from typing import List, Optional
 from sqlalchemy import or_, and_
+from app.core.exceptions import InvalidContactInput
 
 class ContactService:
     def __init__(self, db: Session):
         self.db = db
 
     def identify_contact(self, contact_in: ContactCreate) -> ContactResponse:
+        if not contact_in.email and not contact_in.phoneNumber:
+            raise InvalidContactInput()
         # find all contacts with matching email or phone
         query = self.db.query(Contact).filter(
             or_(
