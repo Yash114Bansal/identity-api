@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router as contact_router
 from app.core.config import Config
 from app.core.exceptions import AppException
+from mangum import Mangum
 
 
 def create_app() -> FastAPI:
@@ -17,3 +18,4 @@ def create_app() -> FastAPI:
     return app
 
 app = create_app()
+handler = Mangum(app)
