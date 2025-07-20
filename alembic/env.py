@@ -4,14 +4,13 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
-
 import sys
 import os
 from dotenv import load_dotenv
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 load_dotenv()
 from app.db.base import Base
-
+from app.models.contact import Contact
 config = context.config
 
 if config.config_file_name is not None:
