@@ -1,18 +1,18 @@
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field
 
 class ContactBase(BaseModel):
-    email: Optional[EmailStr] = None
-    phoneNumber: Optional[str] = None
+    email: Optional[EmailStr] = Field(None, description="The email address of the contact.")
+    phoneNumber: Optional[str] = Field(None, description="The phone number of the contact.")
 
 class ContactCreate(ContactBase):
+    """Schema for creating or identifying a contact."""
     pass
 
 class ContactResponse(BaseModel):
-    primaryContatctId: int
-    emails: List[str]
-    phoneNumbers: List[str]
-    secondaryContactIds: List[int]
+    primaryContatctId: int = Field(..., description="The ID of the primary contact.")
+    emails: List[str] = Field(..., description="List of all emails associated with the contact, primary first.")
+    phoneNumbers: List[str] = Field(..., description="List of all phone numbers associated with the contact, primary first.")
+    secondaryContactIds: List[int] = Field(..., description="IDs of all secondary contacts linked to the primary contact.")
 
-    class Config:
-        orm_mode = True
+    model_config = dict(from_attributes=True)
